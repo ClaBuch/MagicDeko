@@ -1,12 +1,18 @@
+import PIL.Image
 import numpy
 from skimage import io
 import os
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from PIL import Image
+import xml.etree.ElementTree as ET
+from sklearn.cluster import KMeans
 
-IMG_PATH = 'C:/Users/mabo2/Desktop/ArtCards/cards'
-PLACEHOLDER = 'C:/Users/mabo2/Desktop/ArtCards/placeholder.png'
+tree = ET.parse('config.xml')
+
+IMG_PATH = tree.find('img_path').text
+PLACEHOLDER = tree.find('placeholder_path').text
+GRADIENT = tree.find('gradient_path').text
 COL_LENGTH = 14
 COL_HEIGHT = 11
 
@@ -16,20 +22,25 @@ def average_colour(file):
     return average
 
 
-def calc_colour(directory, coll=None):
+def calc_colour(directory, coll=None, ret_names=True):
     cards = []
     for (directory_path, directory_name, filenames) in os.walk(directory):
         for file in filenames:
             c = average_colour(str(directory_path).replace('\\','/')+"/"+file)
-            n = str(file)[str(file).find('_')+1:-4]
+            n = str(file)[:-4]
             if coll is None:
-                cards.append([n, c])
+                if ret_names:
+                    cards.append([n, c])
+                else:
+                    cards.append(c)
             else:
-                set_name, number = n.split("_")
+                set_name, number, c_name = n.split("_")
                 number = int(number)
                 if number in coll[set_name]:
-                    cards.append([n, c])
-
+                    if ret_names:
+                        cards.append([n, c])
+                    else:
+                        cards.append(c)
     return cards
 
 
@@ -62,26 +73,23 @@ def colour_distance(colour1, colour2):
 
 def optimize_layout(path):
     img = read_gradient(path)
-    colour_list = calc_colour(IMG_PATH, read_collected())
-    print(colour_list) #hier sind noch super viele drin
+    colour_list = calc_colour(IMG_PATH)#read_collected()
+    print(colour_list)
     result = {}
-    for card in colour_list:
-        d = 10000.0
-        pos = []
-        for i in range(len(img)): #ab hier geht es glaube schief irgenwo
-            for j in range(len(img[0])):
-                if [i, j] in result.values():
-                    pass
-                else:
+
+    for i in range(COL_HEIGHT):
+        for j in range(COL_LENGTH):
+            d = 10000.0
+            c = None
+            for card in colour_list:
                     new_d = colour_distance(img[i][j],card[1])
                     if new_d < d:
                         d = new_d
-                        pos = [i,j]
-        result[card[0]] = pos[0] * COL_LENGTH + pos[1]
-        print(result) #weil hier sind glaube nur noch die drin die auch angezeigt werden ...
-    inv = dict((v, k) for k, v in result.items())
-    print(inv)
-    return inv
+                        c = card
+            if c is not None and d<150:
+                result[i*COL_LENGTH+j] = c[0]
+                colour_list.remove(c)
+    return result
 
 def visualize(dict):
     fig, axs = plt.subplots(COL_HEIGHT, COL_LENGTH)
@@ -91,12 +99,12 @@ def visualize(dict):
                 index = i * COL_LENGTH + j
                 img_short = dict[index] + '.png'
                 folder = img_short[0:4]
-                img_name = [f for f in os.listdir(IMG_PATH + '/' + folder) if img_short in f]
-                print(IMG_PATH + '/' + folder + '/' + img_name[0])
-                image = mpimg.imread(IMG_PATH + '/' + folder + '/' + img_name[0])
+                path = IMG_PATH + folder + '/' + img_short
+                image = PIL.Image.open(path)
+                print(IMG_PATH + folder + '/' + img_short)
             except:
                 image = mpimg.imread(PLACEHOLDER)
-            axs[i,j].imshow(image, origin='lower')
+            axs[i,j].imshow(image, origin='upper')
             axs[i,j].axis('off')
     plt.axis('off')
     plt.show()
@@ -111,7 +119,10 @@ def convert_to_png():
 
 #convert_to_png()
 
-visualize(optimize_layout("C:/Users/mabo2/Desktop/ArtCards/gradient14x11.png"))
-#print(optimize_layout("C:/Users/mabo2/Desktop/ArtCards/gradient14x11.png"))
+visualize(optimize_layout(GRADIENT))
 
 
+#km = KMeans(n_clusters=16)
+#feats = numpy.array(calc_colour(IMG_PATH, coll=read_collected(),ret_names=False))
+#km.fit(feats)
+#print(km.cluster_centers_)

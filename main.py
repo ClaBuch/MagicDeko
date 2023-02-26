@@ -1,8 +1,12 @@
+import re
+
 import scrython
 import requests
 import time
+import xml.etree.ElementTree as ET
 
-IMAGE_PATH = 'C:/Users/mabo2/Desktop/ArtCards/cards/aneo/'
+tree = ET.parse('config.xml')
+IMAGE_PATH = tree.find('img_path').text
 
 
 def get_set_code():
@@ -51,6 +55,5 @@ card_list = get_all_pages(code)
 for card in card_list:
     time.sleep(0.1)
     #print(card['card_faces'][0]['image_uris']['art_crop'])
-    name = card['card_faces'][0]['name']+'_'+card['set']+'_'+card['collector_number']
-    name = name[:-1]
+    name = card['set'] + '_' + re.sub('[^0-9]+','',card['collector_number']) + '_' + re.sub('[^A-Za-z0-9]+','',card['card_faces'][0]['name'])
     save_image(IMAGE_PATH, card['card_faces'][0]['image_uris']['art_crop'], name)
